@@ -136,8 +136,9 @@ if "story" in st.session_state and st.session_state.get("story"):
         if st.button("🇬🇧 English", use_container_width=True,
                      disabled=(story_lang == "English")):
             with st.spinner("Converting to English..."):
-                result = llm_learn.convert_story_language(
-                    st.session_state["story"], words, "English"
+                result = llm_learn.generate_story(
+                    words, language="English",
+                    existing_story=st.session_state["story"]
                 )
                 _update_story(result, "English")
                 st.rerun()
@@ -146,8 +147,9 @@ if "story" in st.session_state and st.session_state.get("story"):
         if st.button("🇮🇳 Hinglish", use_container_width=True,
                      disabled=(story_lang == "Hinglish")):
             with st.spinner("Converting to Hinglish..."):
-                result = llm_learn.convert_story_language(
-                    st.session_state["story"], words, "Hinglish"
+                result = llm_learn.generate_story(
+                    words, language="Hinglish",
+                    existing_story=st.session_state["story"]
                 )
                 _update_story(result, "Hinglish")
                 st.rerun()
@@ -156,8 +158,9 @@ if "story" in st.session_state and st.session_state.get("story"):
         if st.button("🕉️ Hindi", use_container_width=True,
                      disabled=(story_lang == "Hindi")):
             with st.spinner("Converting to Hindi..."):
-                result = llm_learn.convert_story_language(
-                    st.session_state["story"], words, "Hindi"
+                result = llm_learn.generate_story(
+                    words, language="Hindi",
+                    existing_story=st.session_state["story"]
                 )
                 _update_story(result, "Hindi")
                 st.rerun()

@@ -7,180 +7,124 @@ os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
 
 
-def generate_story(words, size=None, theme=None, count=None, language="English"):
+def generate_story(words, size=None, theme=None, count=None, language="English", existing_story=None):
+    """
+    Single prompt for both generating a fresh story AND converting an existing one.
+    Pass existing_story to convert language, leave it None to generate fresh.
+    """
 
     words_list = [w.strip() for w in words if w.strip()]
     words_display = ", ".join(words_list)
 
-    if not size or size == "Auto":
-        size_guide = "best length suitable for the complexity of all words together"
+    size_guide = size if size and size != "Auto" else "best length suitable for the complexity of all words"
+    theme_guide = theme if theme and theme != "Auto" else "most suitable real-life theme for these words"
+    count = count or 3
+
+    # Language rules
+    if language == "Hindi":
+        lang_rules = """Language: Hindi (Devanagari script only)
+- Write everything — narration, dialogues, moral — fully in Hindi
+- Bold each target word in Hindi transliteration every time it appears"""
+
+    elif language == "Hinglish":
+        lang_rules = """Language: Hinglish — exactly how Indians speak in real daily life
+
+GOLDEN RULE: Base is HINDI. Only those English words come naturally that Indians say without thinking.
+Natural English words Indians always use: school, time, class, office, phone, problem, ready, okay, done, break, free, busy, tired, tension, chill, mood, plan, idea, try, chance, update, seriously, basically, actually, anyway
+
+AVOID:
+- Full English sentences
+- Awkward English verbs like "come karo", "go karo", "finish karo" — Indians don't say this
+- Forcing English to sound Hinglish
+
+BAD: "Miya school se come karti hai. Uska homework finish karna tha."
+GOOD: "Miya school se aayi. Homework khatam karna tha, lekin mood nahi tha. 'Ek break lete hain,' usne socha."
+GOOD: "Usse lagta tha yeh problem solve nahi hogi, but usne try kiya aur result acha aaya."
+
+Bold each target vocabulary word every time it appears."""
+
     else:
-        size_guide = size
+        lang_rules = """Language: English
+- Write the entire story in simple, clear English
+- Bold each target word every time it appears like **word**"""
 
-    if not theme or theme == "Auto":
-        theme_guide = "most suitable real-life related theme for these words"
-    else:
-        theme_guide = theme
-
-    if not count:
-        count = 3
-
-    lang_instruction = _lang_instruction(language)
-
+    # Word info template
     word_info_sections = "\n\n".join([
         f"📖 **Word Info: {w}**\n"
-        f"🇮🇳 **Hindi Meaning:** (Hindi mein 2-3 words)\n"
+        f"🇮🇳 **Hindi Meaning:** (2-3 words in Hindi)\n"
         f"🔁 **Synonyms:** (3-4 similar English words)\n"
         f"🔄 **Antonyms:** (3-4 opposite English words)\n"
         f"📝 **Context:** (1 line — how '{w}' was used in the story)"
         for w in words_list
     ])
 
-    prompt = f"""
-You are a vocabulary learning story writer.
-
-Target vocabulary words: {words_display}
-Language: {language}
-Theme: {theme_guide}
-Size: {size_guide}
-
-Story Size Guide:
-- Short  = 100-120 words
-- Medium = 200-250 words
-- Long   = 350-400 words
-
-Language Instructions:
-{lang_instruction}
-
-Story Rules:
-- Use EVERY word from this list in the story: {words_display}
-- Each word must appear at least {count} times
-- Use each word in different sentence types (question, dialogue, statement, description)
-- Never define any word directly — show meaning through context
-- All words should feel naturally connected in one single flowing story
-- Story must be relatable to real daily life situations
-- Make it engaging and easy to understand
-- End with a one line moral that includes at least one target word
-
-After the story, add this section for EACH word:
-
----
-{word_info_sections}
----
-
-Do not explain word meanings directly. Let reader feel it through story.
-"""
-
-    response = llm.invoke(prompt)
-    return response.content
-
-
-def convert_story_language(existing_story, words, target_language):
-    """
-    Convert an already-generated story into a different language
-    (English / Hinglish / Hindi) while keeping the same plot and words.
-    Also regenerates the Word Info section in the new language.
-    """
-    if isinstance(words, list):
-        words_display = ", ".join(words)
-    else:
-        words_display = words
-
-    lang_instruction = _lang_instruction(target_language)
-
-    word_info_sections = "\n\n".join([
-        f"📖 **Word Info: {w}**\n"
-        f"🇮🇳 **Hindi Meaning:** (Hindi mein 2-3 words)\n"
-        f"🔁 **Synonyms:** (3-4 similar English words)\n"
-        f"🔄 **Antonyms:** (3-4 opposite English words)\n"
-        f"📝 **Context:** (1 line — how '{w}' was used in the story)"
-        for w in (words if isinstance(words, list) else words.split(", "))
-    ])
-
-    prompt = f"""
-You are a vocabulary learning story writer.
-
-Below is an existing story. Convert it into {target_language} while keeping:
-- The SAME plot, characters, and events
-- All target vocabulary words still present and bolded
-- The same moral at the end
-
-Target vocabulary words: {words_display}
-Target language: {target_language}
-
-Language Instructions:
-{lang_instruction}
+    # Story instruction: fresh vs convert
+    if existing_story:
+        story_instruction = f"""Convert the story below into {language}. Keep the SAME plot, characters, events and moral. Only change the language.
 
 --- ORIGINAL STORY ---
 {existing_story}
---- END OF ORIGINAL STORY ---
+--- END ---"""
+    else:
+        story_instruction = f"""Write a brand new story using ALL these words: {words_display}
+- Theme: {theme_guide}
+- Size: {size_guide} (Short=100-120 words, Medium=200-250 words, Long=350-400 words)
+- Each target word must appear at least {count} times
+- Use each word in different sentence types: dialogue, question, statement, description
+- Never define any word directly — show meaning through context
+- Story must feel like a real daily life situation, engaging and easy to understand
+- End with a one-line moral that includes at least one target word"""
 
-Output the converted story first, then add the Word Info section below:
+    prompt = f"""You are a vocabulary learning story writer for Indian English learners.
+
+{lang_rules}
+
+{story_instruction}
+
+After the story, add this Word Info section for each word:
 
 ---
 {word_info_sections}
----
-"""
+---"""
 
     response = llm.invoke(prompt)
     return response.content
-
-
-def _lang_instruction(language):
-    if language == "Hindi":
-        return """Write the ENTIRE story in Hindi (Devanagari script).
-All dialogues, narration and moral must be in Hindi only.
-Bold each target word in Hindi transliteration every time it appears."""
-    elif language == "Hinglish":
-        return """Write the story in Hinglish — a natural mix of Hindi and English.
-Use English for the target vocabulary words and key sentences.
-Use Hindi for dialogues, feelings and connecting sentences.
-Example style: 'Rahul bahut resilient tha. Usne kabhi haar nahi maani.'
-Bold each target English word every time it appears."""
-    else:
-        return """Write the entire story in simple English.
-Bold each target word every time it appears like **word**."""
 
 
 def check_sentences(words, sentence1, sentence2):
+    """Single prompt to check if student used vocabulary words correctly."""
 
-    if isinstance(words, list):
-        words_display = ", ".join(words)
-    else:
-        words_display = words
+    words_display = ", ".join(words) if isinstance(words, list) else words
 
-    prompt = f"""
-You are a friendly English teacher for Indian learners.
+    prompt = f"""You are a friendly English teacher for Indian learners.
 
-Target words: "{words_display}"
+Target words: {words_display}
 
 Student's sentences:
-Sentence 1: "{sentence1}"
-Sentence 2: "{sentence2}"
+1. "{sentence1}"
+2. "{sentence2}"
 
-IMPORTANT RULES before checking:
-- IGNORE capitalization completely — do NOT mark anything wrong just because of uppercase or lowercase letters
-- IGNORE punctuation mistakes
-- IGNORE spelling of non-target words unless it completely changes the meaning
-- ONLY check: is the target word used with the CORRECT MEANING in the right context?
-- ONLY check: does the sentence make logical sense?
-- If the sentence meaning is correct and the word is used properly, mark it ✅ — nothing else matters
+CHECK ONLY THIS:
+- Is the target word used with the correct meaning and in the right context?
+- Does the sentence make logical sense?
 
-Return in EXACTLY this format — keep it very short:
+COMPLETELY IGNORE: spelling, capitalization, punctuation, grammar — none of that matters. Only meaning and usage of the target word matters. If the meaning is right, it's a pass.
+
+Reply in EXACTLY this format:
 
 SENTENCE 1:
 Status: ✅ Correct / ❌ Wrong
-Mistake: (1 line only — only if the word meaning or usage is genuinely wrong, skip if correct)
-Correct: (corrected sentence, skip if correct)
+Mistake: (only if word is used with wrong meaning — else skip this line)
+Correct: (corrected sentence — else skip this line)
 
 SENTENCE 2:
 Status: ✅ Correct / ❌ Wrong
-Mistake: (1 line only — only if the word meaning or usage is genuinely wrong, skip if correct)
-Correct: (corrected sentence, skip if correct)
+Mistake: (only if word is used with wrong meaning — else skip this line)
+Correct: (corrected sentence — else skip this line)
 
 OVERALL:
-(1 short encouraging line in Hinglish)
-"""
+(1 encouraging line in Hinglish)"""
 
     response = llm.invoke(prompt)
     return response.content
+
