@@ -7,20 +7,20 @@ os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
 
 
-def generate_story(words, size=None, theme=None, count=None, language="English", existing_story=None):
-    """
-    Single prompt for both generating a fresh story AND converting an existing one.
-    Pass existing_story to convert language, leave it None to generate fresh.
-    """
+def _build_prompt(words_list, size_guide, theme_guide, count, language, existing_story=None):
+    """Build a single prompt for given language — fresh or convert."""
 
-    words_list = [w.strip() for w in words if w.strip()]
     words_display = ", ".join(words_list)
 
-    size_guide = size if size and size != "Auto" else "best length suitable for the complexity of all words"
-    theme_guide = theme if theme and theme != "Auto" else "most suitable real-life theme for these words"
-    count = count or 3
+    word_info_sections = "\n\n".join([
+        f"📖 **Word Info: {w}**\n"
+        f"🇮🇳 **Hindi Meaning:** (2-3 words in Hindi)\n"
+        f"🔁 **Synonyms:** (3-4 similar English words)\n"
+        f"🔄 **Antonyms:** (3-4 opposite English words)\n"
+        f"📝 **Context:** (1 line — how '{w}' was used in the story)"
+        for w in words_list
+    ])
 
-    # Language rules
     if language == "Hindi":
         lang_rules = """Language: Hindi (Devanagari script only)
 - Write everything — narration, dialogues, moral — fully in Hindi
@@ -48,17 +48,6 @@ Bold each target vocabulary word every time it appears."""
 - Write the entire story in simple, clear English
 - Bold each target word every time it appears like **word**"""
 
-    # Word info template
-    word_info_sections = "\n\n".join([
-        f"📖 **Word Info: {w}**\n"
-        f"🇮🇳 **Hindi Meaning:** (2-3 words in Hindi)\n"
-        f"🔁 **Synonyms:** (3-4 similar English words)\n"
-        f"🔄 **Antonyms:** (3-4 opposite English words)\n"
-        f"📝 **Context:** (1 line — how '{w}' was used in the story)"
-        for w in words_list
-    ])
-
-    # Story instruction: fresh vs convert
     if existing_story:
         story_instruction = f"""Convert the story below into {language}. Keep the SAME plot, characters, events and moral. Only change the language.
 
@@ -75,7 +64,7 @@ Bold each target vocabulary word every time it appears."""
 - Story must feel like a real daily life situation, engaging and easy to understand
 - End with a one-line moral that includes at least one target word"""
 
-    prompt = f"""You are a vocabulary learning story writer for Indian English learners.
+    return f"""You are a vocabulary learning story writer for Indian English learners.
 
 {lang_rules}
 
@@ -87,8 +76,38 @@ After the story, add this Word Info section for each word:
 {word_info_sections}
 ---"""
 
-    response = llm.invoke(prompt)
-    return response.content
+
+def generate_all_languages(words, size=None, theme=None, count=None, first_language="English"):
+    """
+    Generate story in all 3 languages at once and return a dict.
+    First generates in first_language, then converts to the other two.
+    This way user never needs to call AI again just to switch language.
+    """
+    words_list = [w.strip() for w in words if w.strip()]
+    size_guide = size if size and size != "Auto" else "best length suitable for the complexity of all words"
+    theme_guide = theme if theme and theme != "Auto" else "most suitable real-life theme for these words"
+    count = count or 3
+
+    all_languages = ["English", "Hinglish", "Hindi"]
+    other_languages = [l for l in all_languages if l != first_language]
+
+    # Step 1: Generate fresh story in selected language
+    prompt = _build_prompt(words_list, size_guide, theme_guide, count, first_language)
+    first_result = llm.invoke(prompt).content
+
+    # Step 2: Extract just the story part (before ---) to use as base for conversion
+    if "---" in first_result:
+        base_story = first_result.split("---")[0].strip()
+    else:
+        base_story = first_result.strip()
+
+    # Step 3: Convert to other 2 languages
+    results = {first_language: first_result}
+    for lang in other_languages:
+        prompt = _build_prompt(words_list, size_guide, theme_guide, count, lang, existing_story=base_story)
+        results[lang] = llm.invoke(prompt).content
+
+    return results
 
 
 def check_sentences(words, sentence1, sentence2):
@@ -127,4 +146,3 @@ OVERALL:
 
     response = llm.invoke(prompt)
     return response.content
-
