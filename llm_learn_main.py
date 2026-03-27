@@ -1,54 +1,63 @@
 import streamlit as st
 import llm_learn
 
+# llm_learn.py must have convert_story_language() — see updated llm_learn.py
+
+def _update_story(result, lang):
+    """Parse result and update story + word_info in session state."""
+    if "Word Info" in result:
+        parts = result.split("---")
+        st.session_state["story"] = parts[0].strip()
+        info_parts = [p.strip() for p in parts[1:] if "Word Info" in p or "Hindi Meaning" in p]
+        st.session_state["word_info"] = "\n\n---\n\n".join(info_parts)
+    else:
+        st.session_state["story"] = result
+        st.session_state["word_info"] = ""
+    st.session_state["story_language"] = lang
+    st.session_state["feedback"] = None
+
 st.set_page_config(page_title="VocabStory", page_icon="📖")
 
 st.title("📖 VocabStory — Learn English Through Stories")
 st.markdown("Enter words and we'll build a story that teaches you how to use them naturally!")
 
 # ─────────────────────────────────────
-# STEP 1 — Word Input (Enter per word)
+# STEP 1 — Word Input (Comma-separated)
 # ─────────────────────────────────────
 st.markdown("### ✏️ Enter Words")
-st.markdown("Press **Enter** after each word to add it to the list")
+st.markdown("Enter multiple words **separated by commas** — e.g. `resilient, empathy, persevere`")
 
-# Word input
-new_word = st.text_input(
-    "Type a word and press Enter",
-    placeholder="e.g. resilient",
-    key="word_input"
+words_input = st.text_input(
+    "Your vocabulary words",
+    placeholder="e.g. resilient, empathy, persevere, diligent",
+    key="words_input"
 )
 
-# Initialize word list in session
-if "word_list" not in st.session_state:
-    st.session_state["word_list"] = []
+# Parse words from comma-separated input
+if words_input.strip():
+    word_list = [w.strip() for w in words_input.split(",") if w.strip()]
+    # Deduplicate (case-insensitive), preserve order
+    seen = set()
+    unique_words = []
+    for w in word_list:
+        if w.lower() not in seen:
+            seen.add(w.lower())
+            unique_words.append(w)
+    word_list = unique_words
+else:
+    word_list = []
 
-# Add word on input
-col_add, col_clear = st.columns([1, 1])
-with col_add:
-    if st.button("➕ Add Word"):
-        if new_word.strip() and new_word.strip().lower() not in [w.lower() for w in st.session_state["word_list"]]:
-            st.session_state["word_list"].append(new_word.strip())
-            st.rerun()
-        elif new_word.strip() == "":
-            st.warning("Please type a word first!")
-        else:
-            st.warning("Word already added!")
-
-with col_clear:
-    if st.button("🗑️ Clear All"):
-        st.session_state["word_list"] = []
-        st.rerun()
-
-# Show added words as chips
-if st.session_state["word_list"]:
-    st.markdown("**Your words:**")
-    cols = st.columns(min(len(st.session_state["word_list"]), 5))
-    for i, w in enumerate(st.session_state["word_list"]):
-        with cols[i % 5]:
-            if st.button(f"❌ {w}", key=f"remove_{i}"):
-                st.session_state["word_list"].pop(i)
-                st.rerun()
+# Show parsed word chips
+if word_list:
+    st.markdown("**Words detected:**")
+    chip_html = " ".join(
+        f'<span style="background:#e8f4fd; border:1px solid #90caf9; border-radius:20px; padding:3px 12px; margin:3px; display:inline-block; font-size:0.9em;">📌 {w}</span>'
+        for w in word_list
+    )
+    st.markdown(chip_html, unsafe_allow_html=True)
+    st.caption(f"✅ {len(word_list)} word(s) ready")
+elif words_input.strip():
+    st.warning("⚠️ Could not parse any words. Please separate words with commas.")
 
 # ─────────────────────────────────────
 # STEP 2 — Preferences
@@ -83,26 +92,16 @@ with col4:
 # STEP 3 — Generate
 # ─────────────────────────────────────
 if st.button("🚀 Generate Story", type="primary"):
-    if not st.session_state["word_list"]:
-        st.warning("⚠️ Please add at least one word!")
+    if not word_list:
+        st.warning("⚠️ Please enter at least one word!")
     else:
         with st.spinner("✨ Crafting your story..."):
             result = llm_learn.generate_story(
-                st.session_state["word_list"],
+                word_list,
                 size, theme, count, language
             )
-            st.session_state["story_words"] = st.session_state["word_list"].copy()
-            st.session_state["feedback"] = None
-
-            # Split story and word info
-            if "Word Info" in result:
-                parts = result.split("---")
-                st.session_state["story"] = parts[0].strip()
-                info_parts = [p.strip() for p in parts[1:] if "Word Info" in p or "Hindi Meaning" in p]
-                st.session_state["word_info"] = "\n\n---\n\n".join(info_parts)
-            else:
-                st.session_state["story"] = result
-                st.session_state["word_info"] = ""
+            st.session_state["story_words"] = word_list.copy()
+            _update_story(result, language)
 
 # ─────────────────────────────────────
 # DISPLAY ORDER:
@@ -123,9 +122,46 @@ if "story" in st.session_state and st.session_state.get("story"):
         st.markdown("---")
 
     # ── 2. STORY ──
+    story_lang = st.session_state.get("story_language", "English")
     st.markdown(f"## 📖 Story")
-    st.caption(f"Words: **{words_str}**")
+    st.caption(f"Words: **{words_str}** &nbsp;|&nbsp; Language: **{story_lang}**")
     st.markdown(st.session_state["story"])
+
+    # ── LANGUAGE CONVERTER ──
+    st.markdown("#### 🌐 Convert Story Language")
+    st.caption("Instantly retranslate the same story — no need to regenerate!")
+    lang_col1, lang_col2, lang_col3 = st.columns(3)
+
+    with lang_col1:
+        if st.button("🇬🇧 English", use_container_width=True,
+                     disabled=(story_lang == "English")):
+            with st.spinner("Converting to English..."):
+                result = llm_learn.convert_story_language(
+                    st.session_state["story"], words, "English"
+                )
+                _update_story(result, "English")
+                st.rerun()
+
+    with lang_col2:
+        if st.button("🇮🇳 Hinglish", use_container_width=True,
+                     disabled=(story_lang == "Hinglish")):
+            with st.spinner("Converting to Hinglish..."):
+                result = llm_learn.convert_story_language(
+                    st.session_state["story"], words, "Hinglish"
+                )
+                _update_story(result, "Hinglish")
+                st.rerun()
+
+    with lang_col3:
+        if st.button("🕉️ Hindi", use_container_width=True,
+                     disabled=(story_lang == "Hindi")):
+            with st.spinner("Converting to Hindi..."):
+                result = llm_learn.convert_story_language(
+                    st.session_state["story"], words, "Hindi"
+                )
+                _update_story(result, "Hindi")
+                st.rerun()
+
     st.markdown("---")
 
     # ── 3. SENTENCE WRITING ──
@@ -155,7 +191,6 @@ if "story" in st.session_state and st.session_state.get("story"):
         if sentence1.strip() == "" or sentence2.strip() == "":
             st.warning("⚠️ Please write both sentences!")
         else:
-            # Check if at least one word used in each sentence
             s1_has_word = any(w.lower() in sentence1.lower() for w in words)
             s2_has_word = any(w.lower() in sentence2.lower() for w in words)
 
@@ -205,6 +240,7 @@ if "story" in st.session_state and st.session_state.get("story"):
                 st.rerun()
         with col_b:
             if st.button("➡️ New Words"):
-                for key in ["story", "story_words", "word_info", "feedback", "word_list"]:
-                    st.session_state[key] = None
+                for key in ["story", "story_words", "word_info", "feedback"]:
+                    if key in st.session_state:
+                        st.session_state[key] = None
                 st.rerun()

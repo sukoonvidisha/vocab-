@@ -9,42 +9,24 @@ llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
 
 def generate_story(words, size=None, theme=None, count=None, language="English"):
 
-    # words is always a list
     words_list = [w.strip() for w in words if w.strip()]
     words_display = ", ".join(words_list)
 
-    # Size guide
     if not size or size == "Auto":
         size_guide = "best length suitable for the complexity of all words together"
     else:
         size_guide = size
 
-    # Theme guide
     if not theme or theme == "Auto":
         theme_guide = "most suitable real-life related theme for these words"
     else:
         theme_guide = theme
 
-    # Count per word
     if not count:
         count = 3
 
-    # Language instruction
-    if language == "Hindi":
-        lang_instruction = """Write the ENTIRE story in Hindi (Devanagari script).
-All dialogues, narration and moral must be in Hindi only.
-Bold each target word in Hindi transliteration every time it appears."""
-    elif language == "Hinglish":
-        lang_instruction = """Write the story in Hinglish — a natural mix of Hindi and English.
-Use English for the target vocabulary words and key sentences.
-Use Hindi for dialogues, feelings and connecting sentences.
-Example style: 'Rahul bahut resilient tha. Usne kabhi haar nahi maani.'
-Bold each target English word every time it appears."""
-    else:
-        lang_instruction = """Write the entire story in simple English.
-Bold each target word every time it appears like **word**."""
+    lang_instruction = _lang_instruction(language)
 
-    # Word info section for each word
     word_info_sections = "\n\n".join([
         f"📖 **Word Info: {w}**\n"
         f"🇮🇳 **Hindi Meaning:** (Hindi mein 2-3 words)\n"
@@ -91,6 +73,73 @@ Do not explain word meanings directly. Let reader feel it through story.
 
     response = llm.invoke(prompt)
     return response.content
+
+
+def convert_story_language(existing_story, words, target_language):
+    """
+    Convert an already-generated story into a different language
+    (English / Hinglish / Hindi) while keeping the same plot and words.
+    Also regenerates the Word Info section in the new language.
+    """
+    if isinstance(words, list):
+        words_display = ", ".join(words)
+    else:
+        words_display = words
+
+    lang_instruction = _lang_instruction(target_language)
+
+    word_info_sections = "\n\n".join([
+        f"📖 **Word Info: {w}**\n"
+        f"🇮🇳 **Hindi Meaning:** (Hindi mein 2-3 words)\n"
+        f"🔁 **Synonyms:** (3-4 similar English words)\n"
+        f"🔄 **Antonyms:** (3-4 opposite English words)\n"
+        f"📝 **Context:** (1 line — how '{w}' was used in the story)"
+        for w in (words if isinstance(words, list) else words.split(", "))
+    ])
+
+    prompt = f"""
+You are a vocabulary learning story writer.
+
+Below is an existing story. Convert it into {target_language} while keeping:
+- The SAME plot, characters, and events
+- All target vocabulary words still present and bolded
+- The same moral at the end
+
+Target vocabulary words: {words_display}
+Target language: {target_language}
+
+Language Instructions:
+{lang_instruction}
+
+--- ORIGINAL STORY ---
+{existing_story}
+--- END OF ORIGINAL STORY ---
+
+Output the converted story first, then add the Word Info section below:
+
+---
+{word_info_sections}
+---
+"""
+
+    response = llm.invoke(prompt)
+    return response.content
+
+
+def _lang_instruction(language):
+    if language == "Hindi":
+        return """Write the ENTIRE story in Hindi (Devanagari script).
+All dialogues, narration and moral must be in Hindi only.
+Bold each target word in Hindi transliteration every time it appears."""
+    elif language == "Hinglish":
+        return """Write the story in Hinglish — a natural mix of Hindi and English.
+Use English for the target vocabulary words and key sentences.
+Use Hindi for dialogues, feelings and connecting sentences.
+Example style: 'Rahul bahut resilient tha. Usne kabhi haar nahi maani.'
+Bold each target English word every time it appears."""
+    else:
+        return """Write the entire story in simple English.
+Bold each target word every time it appears like **word**."""
 
 
 def check_sentences(words, sentence1, sentence2):
