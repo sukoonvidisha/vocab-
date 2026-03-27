@@ -158,20 +158,24 @@ Student's sentences:
 Sentence 1: "{sentence1}"
 Sentence 2: "{sentence2}"
 
-Check each sentence for:
-- Are the target words used correctly? (meaning, correct form, correct part of speech)
-- Any grammar mistake? (verb form, tense, subject-verb agreement, articles, prepositions, spelling)
+IMPORTANT RULES before checking:
+- IGNORE capitalization completely — do NOT mark anything wrong just because of uppercase or lowercase letters
+- IGNORE punctuation mistakes
+- IGNORE spelling of non-target words unless it completely changes the meaning
+- ONLY check: is the target word used with the CORRECT MEANING in the right context?
+- ONLY check: does the sentence make logical sense?
+- If the sentence meaning is correct and the word is used properly, mark it ✅ — nothing else matters
 
 Return in EXACTLY this format — keep it very short:
 
 SENTENCE 1:
 Status: ✅ Correct / ❌ Wrong
-Mistake: (1 line only — what is wrong, skip if correct)
+Mistake: (1 line only — only if the word meaning or usage is genuinely wrong, skip if correct)
 Correct: (corrected sentence, skip if correct)
 
 SENTENCE 2:
 Status: ✅ Correct / ❌ Wrong
-Mistake: (1 line only — what is wrong, skip if correct)
+Mistake: (1 line only — only if the word meaning or usage is genuinely wrong, skip if correct)
 Correct: (corrected sentence, skip if correct)
 
 OVERALL:
