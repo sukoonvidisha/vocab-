@@ -1,97 +1,116 @@
 import os
+import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-import streamlit as st
 os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
 
 
-def generate_story(word, size=None, theme=None, count=None):
+def generate_story(words, size=None, theme=None, count=None, language="English"):
 
+    # words is always a list
+    words_list = [w.strip() for w in words if w.strip()]
+    words_display = ", ".join(words_list)
+
+    # Size guide
     if not size or size == "Auto":
-        size_guide = "best length suitable for the word's complexity"
+        size_guide = "best length suitable for the complexity of all words together"
     else:
         size_guide = size
 
+    # Theme guide
     if not theme or theme == "Auto":
-        theme_guide = "most suitable real-life related theme for this word"
+        theme_guide = "most suitable real-life related theme for these words"
     else:
         theme_guide = theme
 
+    # Count per word
     if not count:
-        count = 8
+        count = 3
+
+    # Language instruction
+    if language == "Hindi":
+        lang_instruction = """Write the ENTIRE story in Hindi (Devanagari script).
+All dialogues, narration and moral must be in Hindi only.
+Bold each target word in Hindi transliteration every time it appears."""
+    elif language == "Hinglish":
+        lang_instruction = """Write the story in Hinglish — a natural mix of Hindi and English.
+Use English for the target vocabulary words and key sentences.
+Use Hindi for dialogues, feelings and connecting sentences.
+Example style: 'Rahul bahut resilient tha. Usne kabhi haar nahi maani.'
+Bold each target English word every time it appears."""
+    else:
+        lang_instruction = """Write the entire story in simple English.
+Bold each target word every time it appears like **word**."""
+
+    # Word info section for each word
+    word_info_sections = "\n\n".join([
+        f"📖 **Word Info: {w}**\n"
+        f"🇮🇳 **Hindi Meaning:** (Hindi mein 2-3 words)\n"
+        f"🔁 **Synonyms:** (3-4 similar English words)\n"
+        f"🔄 **Antonyms:** (3-4 opposite English words)\n"
+        f"📝 **Context:** (1 line — how '{w}' was used in the story)"
+        for w in words_list
+    ])
 
     prompt = f"""
-Write an interesting and engaging story for vocabulary learning.
+You are a vocabulary learning story writer.
 
-Target vocabulary word: "{word}"
+Target vocabulary words: {words_display}
+Language: {language}
 Theme: {theme_guide}
-Size: {size_guide} (Short=150-200 words, Medium=300-350 words, Long=500-600 words)
-Word repeat count: Use "{word}" naturally at least {count} times
+Size: {size_guide}
 
-Rules:
-- Use "{word}" in different types of sentences (questions, dialogues, statements, descriptions)
-- Never define "{word}" directly — let the reader understand its meaning through context
-- Bold "{word}" every time it appears like **{word}**
-- Keep the story relatable to real life situations people actually face daily
-- Make it engaging, emotional, and easy to understand for anyone learning English
-- End the story with a one line moral or takeaway that includes "{word}"
+Story Size Guide:
+- Short  = 100-120 words
+- Medium = 200-250 words
+- Long   = 350-400 words
 
-Auto-selection Guide (use when theme or size is set to auto):
-- Emotional words (grief, joy) → Real Life / Family theme
-- Action words (persist, strive) → Motivation / Career theme
-- Social words (empathy, rude) → School / Friendship theme
-- Complex/rare words → Adventure or Mystery theme
-- Simple word → Short length
-- Medium complexity → Medium length
-- Complex word → Long length
+Language Instructions:
+{lang_instruction}
 
-Do not explain the meaning directly. Let the reader feel it through the story.
+Story Rules:
+- Use EVERY word from this list in the story: {words_display}
+- Each word must appear at least {count} times
+- Use each word in different sentence types (question, dialogue, statement, description)
+- Never define any word directly — show meaning through context
+- All words should feel naturally connected in one single flowing story
+- Story must be relatable to real daily life situations
+- Make it engaging and easy to understand
+- End with a one line moral that includes at least one target word
 
-After the story, add a section in EXACTLY this format:
+After the story, add this section for EACH word:
 
 ---
-📖 **Word Info: {word}**
-
-🇮🇳 **Hindi Meaning:** (Hindi mein matlab — 2-3 Hindi words)
-
-🔁 **Synonyms:** (3-4 similar English words)
-
-🔄 **Antonyms:** (3-4 opposite English words)
-
-📝 **Story Summary:** (1-2 lines — how was "{word}" used in the story context above)
+{word_info_sections}
 ---
+
+Do not explain word meanings directly. Let reader feel it through story.
 """
 
     response = llm.invoke(prompt)
     return response.content
 
 
-def check_sentences(word, sentence1, sentence2):
-    """
-    Deep grammar check for user sentences including:
-    - Word usage correctness
-    - Verb forms (V1/V2/V3/V4/V5)
-    - Tenses
-    - Subject-verb agreement
-    - Articles (a/an/the)
-    - Prepositions
-    - Spelling
-    - Sentence structure
-    """
+def check_sentences(words, sentence1, sentence2):
+
+    if isinstance(words, list):
+        words_display = ", ".join(words)
+    else:
+        words_display = words
 
     prompt = f"""
 You are a friendly English teacher for Indian learners.
 
-Target word: "{word}"
+Target words: "{words_display}"
 
 Student's sentences:
 Sentence 1: "{sentence1}"
 Sentence 2: "{sentence2}"
 
 Check each sentence for:
-- Is "{word}" used correctly? (meaning, correct form, correct part of speech)
+- Are the target words used correctly? (meaning, correct form, correct part of speech)
 - Any grammar mistake? (verb form, tense, subject-verb agreement, articles, prepositions, spelling)
 
 Return in EXACTLY this format — keep it very short:
